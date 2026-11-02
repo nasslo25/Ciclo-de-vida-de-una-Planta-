@@ -1,0 +1,1029 @@
+HTML
+<!DOCTYPE html>
+<html lang="es">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no, viewport-fit=cover">
+    <title>Ecosistema Interactivo Phygital</title>
+    <script src="https://cdn.tailwindcss.com"></script>
+    <style>
+        * {
+            box-sizing: border-box;
+            user-select: none;
+            -webkit-user-select: none;
+            touch-action: none;
+        }
+
+        :root {
+            --app-height: 100dvh;
+        }
+
+        html, body {
+            margin: 0;
+            padding: 0;
+            width: 100vw;
+            height: var(--app-height);
+            max-height: var(--app-height);
+            overflow: hidden;
+            background-color: #0f172a;
+            color: #e2e8f0;
+            font-family: ui-monospace, SFMono-Regular, Menlo, Monaco, Consolas, monospace;
+        }
+
+        .glass-panel {
+            background: rgba(15, 23, 42, 0.94);
+            border-color: rgba(255, 255, 255, 0.08);
+            backdrop-filter: blur(12px);
+            -webkit-backdrop-filter: blur(12px);
+        }
+
+        .log-container::-webkit-scrollbar {
+            width: 3px;
+        }
+
+        .log-container::-webkit-scrollbar-thumb {
+            background-color: #475569;
+            border-radius: 3px;
+        }
+
+        #scannerCanvas {
+            transform: scaleX(-1);
+        }
+
+        .floating-ui {
+            position: absolute;
+            bottom: clamp(0.5rem, 1.8vh, 1.25rem);
+            left: 50%;
+            transform: translateX(-50%);
+            background: rgba(15, 23, 42, 0.88);
+            padding: 0.35rem 0.9rem;
+            border-radius: 9999px;
+            border: 1px solid rgba(255, 255, 255, 0.18);
+            backdrop-filter: blur(8px);
+            -webkit-backdrop-filter: blur(8px);
+            z-index: 20;
+            white-space: nowrap;
+            box-shadow: 0 10px 25px -5px rgba(0, 0, 0, 0.5);
+        }
+
+        #startOverlay {
+            backdrop-filter: blur(16px);
+            -webkit-backdrop-filter: blur(16px);
+        }
+    </style>
+</head>
+<body class="flex flex-col md:flex-row w-screen h-[100dvh] overflow-hidden">
+
+    <!-- PANTALLA DE INICIALIZACIÓN -->
+    <div id="startOverlay" class="absolute inset-0 bg-slate-950/95 z-50 flex flex-col items-center justify-center text-center p-4 transition-opacity duration-500">
+        <div class="max-w-sm w-full bg-slate-900/90 p-6 rounded-2xl border border-slate-700 shadow-2xl">
+            <h1 class="text-2xl sm:text-3xl text-white font-extrabold mb-2.5">🌱 Campo Phygital</h1>
+            <p class="text-slate-400 text-xs sm:text-sm mb-5 leading-relaxed">
+                Controla el ecosistema mostrando objetos físicos a la cámara:<br>
+                <span class="text-yellow-400 font-bold">🟡 Amarillo:</span> Rayos de Sol |
+                <span class="text-blue-400 font-bold">🔵 Azul:</span> Nubes y Lluvia<br>
+                <span class="text-emerald-400 font-bold">🟢 Verde (Izq/Der):</span> Viento y semillas<br>
+                <span class="text-rose-400 font-bold">🔴 Rojo (Izq/Der):</span> Abejitas polinizadoras
+            </p>
+            <button id="startBtn" class="w-full bg-emerald-500 hover:bg-emerald-400 active:scale-95 text-slate-950 font-black py-3 px-6 rounded-xl text-base shadow-[0_0_25px_rgba(16,185,129,0.35)] transition-all">
+                COMENZAR EXPERIENCIA
+            </button>
+        </div>
+    </div>
+
+    <!-- PANEL DE SENSORES ULTRA-COMPACTO (MÁXIMO ESPACIO PARA EL LIENZO) -->
+    <aside class="glass-panel w-full md:w-[190px] lg:w-[215px] shrink-0 h-auto md:h-full flex flex-col p-2.5 border-b md:border-b-0 md:border-r z-10 max-h-[28dvh] md:max-h-full overflow-y-auto">
+        
+        <header class="flex items-center justify-between pb-1.5 mb-1.5 border-b border-slate-800 shrink-0">
+            <div class="flex items-center gap-1.5">
+                <span class="w-2 h-2 rounded-full bg-teal-400 animate-pulse"></span>
+                <span class="text-[11px] font-bold tracking-wider text-white uppercase">Sensor HSL</span>
+            </div>
+            <span class="text-[9px] text-teal-400 font-mono">DIREC</span>
+        </header>
+
+        <div class="flex md:flex-col gap-2 shrink-0">
+            <!-- Visor Cámara Compacto -->
+            <video id="camera" class="hidden" autoplay playsinline muted></video>
+            <div class="relative w-24 sm:w-28 md:w-full aspect-[4/3] bg-black rounded-md overflow-hidden border border-slate-800 shrink-0">
+                <canvas id="scannerCanvas" class="w-full h-full object-cover"></canvas>
+                <div class="absolute inset-0 pointer-events-none opacity-20" style="background: repeating-linear-gradient(0deg, transparent, transparent 2px, #000 2px, #000 4px);"></div>
+                <div class="absolute inset-y-0 left-1/2 w-[1px] bg-white/25 pointer-events-none border-dashed"></div>
+            </div>
+
+            <!-- Barras Compactas -->
+            <section class="flex-1 flex flex-col justify-center gap-1">
+                <!-- Amarillo -->
+                <div>
+                    <div class="flex justify-between text-[9px] sm:text-[10px] mb-0.5 text-yellow-400 font-semibold">
+                        <span>[AM] Sol</span>
+                        <span id="yellowVal">0%</span>
+                    </div>
+                    <div class="w-full bg-slate-800 rounded-full h-1 overflow-hidden">
+                        <div id="yellowBar" class="bg-yellow-400 h-full rounded-full transition-all duration-75" style="width: 0%"></div>
+                    </div>
+                </div>
+
+                <!-- Azul -->
+                <div>
+                    <div class="flex justify-between text-[9px] sm:text-[10px] mb-0.5 text-blue-400 font-semibold">
+                        <span>[AZ] Lluvia</span>
+                        <span id="blueVal">0%</span>
+                    </div>
+                    <div class="w-full bg-slate-800 rounded-full h-1 overflow-hidden">
+                        <div id="blueBar" class="bg-blue-400 h-full rounded-full transition-all duration-75" style="width: 0%"></div>
+                    </div>
+                </div>
+
+                <!-- Verde -->
+                <div>
+                    <div class="flex justify-between text-[9px] sm:text-[10px] mb-0.5 text-emerald-400 font-semibold items-center">
+                        <span class="truncate">[VD] Viento</span>
+                        <span id="greenDirTag" class="text-white text-[7px] bg-emerald-950 px-1 rounded border border-emerald-600">---</span>
+                    </div>
+                    <div class="w-full bg-slate-800 rounded-full h-1 overflow-hidden">
+                        <div id="greenBar" class="bg-emerald-400 h-full rounded-full transition-all duration-75" style="width: 0%"></div>
+                    </div>
+                </div>
+
+                <!-- Rojo -->
+                <div>
+                    <div class="flex justify-between text-[9px] sm:text-[10px] mb-0.5 text-rose-400 font-semibold items-center">
+                        <span class="truncate">[RJ] Abejas</span>
+                        <span id="redDirTag" class="text-white text-[7px] bg-rose-950 px-1 rounded border border-rose-600">---</span>
+                    </div>
+                    <div class="w-full bg-slate-800 rounded-full h-1 overflow-hidden">
+                        <div id="redBar" class="bg-rose-400 h-full rounded-full transition-all duration-75" style="width: 0%"></div>
+                    </div>
+                </div>
+            </section>
+        </div>
+
+        <footer class="hidden md:flex flex-1 mt-2 min-h-[45px] bg-slate-950/70 border border-slate-800/80 rounded-md p-1.5 overflow-y-auto log-container font-mono text-[9px] leading-tight" id="consoleLog">
+            <p class="text-slate-500">> Presiona 'Comenzar Experiencia'...</p>
+        </footer>
+    </aside>
+
+    <!-- LIENZO PRINCIPAL DEL ECOSISTEMA (CANVAS AMPLIFICADO) -->
+    <main class="relative flex-1 w-full h-full overflow-hidden bg-sky-200" id="ecosystemContainer">
+        <canvas id="ecosystemCanvas" class="block w-full h-full"></canvas>
+
+        <div class="floating-ui text-white text-[10px] sm:text-xs font-bold flex items-center gap-2 sm:gap-2.5">
+            <span class="text-emerald-400" id="globalStatus">Campo: 1 flor</span>
+            <span class="text-slate-400">|</span>
+            <span id="globalGrowthVal" class="font-mono text-white">0.0%</span>
+        </div>
+    </main>
+
+    <script>
+        // --- 1. ELEMENTOS DOM ---
+        const video = document.getElementById('camera');
+        const scannerCanvas = document.getElementById('scannerCanvas');
+        const scanCtx = scannerCanvas.getContext('2d', { willReadFrequently: true });
+
+        const ecosystemContainer = document.getElementById('ecosystemContainer');
+        const ecosystemCanvas = document.getElementById('ecosystemCanvas');
+        const ecoCtx = ecosystemCanvas.getContext('2d');
+
+        let cw = 0;
+        let ch = 0;
+        let dpr = 1;
+
+        function resizeCanvas() {
+            dpr = window.devicePixelRatio || 1;
+            cw = ecosystemContainer.clientWidth;
+            ch = ecosystemContainer.clientHeight;
+
+            ecosystemCanvas.width = Math.floor(cw * dpr);
+            ecosystemCanvas.height = Math.floor(ch * dpr);
+            ecoCtx.setTransform(dpr, 0, 0, dpr, 0, 0);
+        }
+
+        const resizeObserver = new ResizeObserver(() => resizeCanvas());
+        resizeObserver.observe(ecosystemContainer);
+
+        // --- 2. CÁMARA ---
+        let cameraActive = false;
+
+        function startCamera() {
+            if (cameraActive) return;
+
+            if (!navigator.mediaDevices || !navigator.mediaDevices.getUserMedia) {
+                addLog("Error: Navegador sin soporte de cámara.", "text-rose-400");
+                return;
+            }
+
+            navigator.mediaDevices.getUserMedia({
+                video: {
+                    facingMode: 'user',
+                    width: { ideal: 640 },
+                    height: { ideal: 480 }
+                },
+                audio: false
+            })
+            .then(stream => {
+                video.srcObject = stream;
+                video.onloadedmetadata = () => {
+                    video.play()
+                        .then(() => {
+                            cameraActive = true;
+                            addLog("Cámara activa con detección espacial.", "text-emerald-400");
+                        })
+                        .catch(err => {
+                            addLog("Error en video: " + err.message, "text-rose-400");
+                        });
+                };
+            })
+            .catch(err => {
+                if (err.name === 'NotAllowedError' || err.name === 'PermissionDeniedError') {
+                    addLog("Permiso de cámara denegado.", "text-rose-400");
+                } else {
+                    addLog("Error de cámara: " + err.message, "text-rose-400");
+                }
+            });
+        }
+
+        // --- 3. ESTADO DEL ECOSISTEMA ---
+        let plants = [{ x: 0.5, depth: 0.65, growth: 0 }];
+        let rainDrops = [];
+        let seeds = [];
+        let bees = [];
+        let windLines = [];
+        let clouds = [];
+        let currentCloudAlpha = 0;
+        let globalGrowth = 0;
+
+        let weather = {
+            sun: 0,
+            rain: 0,
+            wind: 0,
+            windDir: 1, 
+            windSide: 'left',
+            pollen: 0,
+            beeSide: 'left'
+        };
+        let lastLog = "";
+
+        for (let i = 0; i < 12; i++) {
+            clouds.push({
+                x: Math.random() * 2000, 
+                y: 10 + Math.random() * 30,
+                speed: 0.2 + Math.random() * 0.8,
+                scale: 0.7 + Math.random() * 0.6
+            });
+        }
+
+        // --- 4. MOTOR DE AUDIO ---
+        let audioCtx;
+        const synths = {};
+
+        function createNoiseSource(ctx) {
+            const bufferSize = ctx.sampleRate * 2;
+            const buffer = ctx.createBuffer(1, bufferSize, ctx.sampleRate);
+            const data = buffer.getChannelData(0);
+            for (let i = 0; i < bufferSize; i++) {
+                data[i] = Math.random() * 2 - 1;
+            }
+            const noise = ctx.createBufferSource();
+            noise.buffer = buffer;
+            noise.loop = true;
+            return noise;
+        }
+
+        function initAudio() {
+            if (audioCtx) {
+                if (audioCtx.state === 'suspended') audioCtx.resume();
+                return;
+            }
+
+            const AudioContextClass = window.AudioContext || window.webkitAudioContext;
+            audioCtx = new AudioContextClass();
+
+            const rainNoise = createNoiseSource(audioCtx);
+            const rainFilter = audioCtx.createBiquadFilter();
+            rainFilter.type = 'lowpass';
+            rainFilter.frequency.value = 950;
+            synths.rainGain = audioCtx.createGain();
+            synths.rainGain.gain.value = 0;
+            rainNoise.connect(rainFilter).connect(synths.rainGain).connect(audioCtx.destination);
+            rainNoise.start();
+
+            const windNoise = createNoiseSource(audioCtx);
+            const windFilter = audioCtx.createBiquadFilter();
+            windFilter.type = 'bandpass';
+            windFilter.frequency.value = 500;
+            windFilter.Q.value = 3.0;
+
+            const windLfo = audioCtx.createOscillator();
+            windLfo.frequency.value = 0.4;
+            const windLfoGain = audioCtx.createGain();
+            windLfoGain.gain.value = 280;
+            windLfo.connect(windLfoGain).connect(windFilter.frequency);
+
+            synths.windGain = audioCtx.createGain();
+            synths.windGain.gain.value = 0;
+            windNoise.connect(windFilter).connect(synths.windGain).connect(audioCtx.destination);
+            windLfo.start();
+            windNoise.start();
+        }
+
+        document.getElementById('startBtn').addEventListener('click', () => {
+            const overlay = document.getElementById('startOverlay');
+            overlay.style.opacity = '0';
+            setTimeout(() => overlay.style.display = 'none', 500);
+
+            initAudio();
+            startCamera();
+            addLog("Simulación direccional iniciada.", "text-emerald-400");
+        });
+
+        // --- 5. VISIÓN ARTIFICIAL (HSL ESPACIAL) ---
+        function rgbToHsl(r, g, b) {
+            r /= 255; g /= 255; b /= 255;
+            const max = Math.max(r, g, b);
+            const min = Math.min(r, g, b);
+            let h = 0;
+            let s = 0;
+            const l = (max + min) / 2;
+
+            if (max !== min) {
+                const d = max - min;
+                s = l > 0.5 ? d / (2 - max - min) : d / (max + min);
+                switch (max) {
+                    case r: h = (g - b) / d + (g < b ? 6 : 0); break;
+                    case g: h = (b - r) / d + 2; break;
+                    case b: h = (r - g) / d + 4; break;
+                }
+                h /= 6;
+            }
+            return [Math.round(h * 360), Math.round(s * 100), Math.round(l * 100)];
+        }
+
+        function analyzeColorsWithSpatial(data, width, height) {
+            let redLeft = 0, redRight = 0;
+            let greenLeft = 0, greenRight = 0;
+            let blue = 0;
+            let yellow = 0;
+
+            const halfWidth = width / 2;
+
+            for (let i = 0; i < data.length; i += 4) {
+                const r = data[i];
+                const g = data[i + 1];
+                const b = data[i + 2];
+                const [h, s, l] = rgbToHsl(r, g, b);
+
+                if (l > 18 && l < 82) {
+                    const pixelIndex = i / 4;
+                    const rawX = pixelIndex % width;
+                    const visualScreenX = (width - 1) - rawX;
+                    const isLeftHalf = visualScreenX < halfWidth;
+
+                    if (s > 45 && (h >= 345 || h <= 15)) {
+                        if (isLeftHalf) redLeft++; else redRight++;
+                    }
+                    else if (s > 55 && h >= 42 && h <= 60) {
+                        yellow++;
+                    }
+                    else if (s > 30 && h >= 190 && h <= 255) {
+                        blue++;
+                    }
+                    else if (s > 30 && h >= 68 && h <= 168) {
+                        if (isLeftHalf) greenLeft++; else greenRight++;
+                    }
+                }
+            }
+
+            const totalPixels = width * height;
+            const multiplier = 18;
+
+            const redTotal = redLeft + redRight;
+            const greenTotal = greenLeft + greenRight;
+
+            return {
+                red: Math.min(100, (redTotal / totalPixels) * 100 * multiplier),
+                redLeft,
+                redRight,
+                green: Math.min(100, (greenTotal / totalPixels) * 100 * multiplier),
+                greenLeft,
+                greenRight,
+                blue: Math.min(100, (blue / totalPixels) * 100 * multiplier),
+                yellow: Math.min(100, (yellow / totalPixels) * 100 * multiplier)
+            };
+        }
+
+        function addLog(msg, colorClass) {
+            if (msg === lastLog) return;
+            lastLog = msg;
+            const logBox = document.getElementById('consoleLog');
+            if (!logBox) return;
+            const time = new Date().toLocaleTimeString('es-ES', { hour12: false });
+            logBox.innerHTML += `<div class="${colorClass}">[${time}] > ${msg}</div>`;
+            logBox.scrollTop = logBox.scrollHeight;
+        }
+
+        // --- 6. CICLO PRINCIPAL Y FÍSICAS RESPONSIVAS ---
+        function loop() {
+            if (video.readyState >= 2 && video.videoWidth > 0) {
+                scannerCanvas.width = video.videoWidth;
+                scannerCanvas.height = video.videoHeight;
+                scanCtx.drawImage(video, 0, 0, scannerCanvas.width, scannerCanvas.height);
+
+                const imgData = scanCtx.getImageData(0, 0, scannerCanvas.width, scannerCanvas.height);
+                const colors = analyzeColorsWithSpatial(imgData.data, scannerCanvas.width, scannerCanvas.height);
+
+                weather.sun = colors.yellow;
+                weather.rain = colors.blue;
+                weather.wind = colors.green;
+                weather.pollen = colors.red;
+
+                if (colors.green > 6) {
+                    if (colors.greenLeft >= colors.greenRight) {
+                        weather.windSide = 'left';
+                        weather.windDir = 1; 
+                        document.getElementById('greenDirTag').innerText = "IZQ ->";
+                        document.getElementById('greenDirTag').className = "text-white text-[7px] bg-emerald-700 px-1 rounded border border-emerald-400";
+                    } else {
+                        weather.windSide = 'right';
+                        weather.windDir = -1; 
+                        document.getElementById('greenDirTag').innerText = "<- DER";
+                        document.getElementById('greenDirTag').className = "text-white text-[7px] bg-emerald-700 px-1 rounded border border-emerald-400";
+                    }
+                } else {
+                    document.getElementById('greenDirTag').innerText = "---";
+                    document.getElementById('greenDirTag').className = "text-white text-[7px] bg-emerald-950 px-1 rounded border border-emerald-600";
+                }
+
+                if (colors.red > 6) {
+                    if (colors.redLeft >= colors.redRight) {
+                        weather.beeSide = 'left';
+                        document.getElementById('redDirTag').innerText = "IZQ ->";
+                        document.getElementById('redDirTag').className = "text-white text-[7px] bg-rose-700 px-1 rounded border border-rose-400";
+                    } else {
+                        weather.beeSide = 'right';
+                        document.getElementById('redDirTag').innerText = "<- DER";
+                        document.getElementById('redDirTag').className = "text-white text-[7px] bg-rose-700 px-1 rounded border border-rose-400";
+                    }
+                } else {
+                    document.getElementById('redDirTag').innerText = "---";
+                    document.getElementById('redDirTag').className = "text-white text-[7px] bg-rose-950 px-1 rounded border border-rose-600";
+                }
+
+                document.getElementById('yellowBar').style.width = colors.yellow + '%';
+                document.getElementById('yellowVal').innerText = colors.yellow.toFixed(0) + '%';
+
+                document.getElementById('blueBar').style.width = colors.blue + '%';
+                document.getElementById('blueVal').innerText = colors.blue.toFixed(0) + '%';
+
+                document.getElementById('greenBar').style.width = colors.green + '%';
+                document.getElementById('redBar').style.width = colors.red + '%';
+            }
+
+            const time = Date.now() / 1000;
+
+            if (audioCtx) {
+                const t = audioCtx.currentTime;
+                synths.rainGain.gain.setTargetAtTime((weather.rain / 100) * 0.35, t, 0.15);
+                synths.windGain.gain.setTargetAtTime((weather.wind / 100) * 0.6, t, 0.15);
+            }
+
+            const baseScale = Math.min(Math.max(cw / 900, 0.55), 1.6);
+            const groundHeight = Math.max(70 * baseScale, ch * 0.28);
+            const groundHorizonY = ch - groundHeight;
+
+            const targetCloudAlpha = weather.rain > 5 ? Math.min(1, weather.rain / 40) : 0;
+            currentCloudAlpha += (targetCloudAlpha - currentCloudAlpha) * 0.05;
+
+            plants.forEach(p => {
+                if (weather.sun > 5 && weather.rain > 5 && p.growth < 100) {
+                    p.growth += 0.15;
+                    if (p.growth > 100) p.growth = 100;
+                }
+            });
+
+            globalGrowth = plants[0].growth;
+            const matureCount = plants.filter(p => p.growth >= 90).length;
+            document.getElementById('globalStatus').innerText = `Campo: ${plants.length} plantas (${matureCount} flores)`;
+            document.getElementById('globalGrowthVal').innerText = globalGrowth.toFixed(1) + "%";
+
+            // Lluvia
+            if (weather.rain > 5) {
+                const dropsPerFrame = Math.floor((weather.rain / 100) * 7) + 2;
+                for (let i = 0; i < dropsPerFrame; i++) {
+                    rainDrops.push({
+                        x: Math.random() * (cw + 250) - 100,
+                        y: (50 + Math.random() * 40) * baseScale,
+                        vy: (11 + Math.random() * 6) * baseScale,
+                        len: (14 + Math.random() * 12) * baseScale,
+                        thick: (1.5 + Math.random() * 1.5) * baseScale,
+                        alpha: 0.5 + Math.random() * 0.45
+                    });
+                }
+            }
+
+            // Viento visual
+            if (weather.wind > 5 && Math.random() < (weather.wind / 100)) {
+                if (weather.windDir === 1) { 
+                    windLines.push({
+                        x: -120 * baseScale, y: Math.random() * ch * 0.70, length: (80 + Math.random() * 160) * baseScale, speed: (13 + Math.random() * 14) * baseScale, dir: 1
+                    });
+                } else { 
+                    windLines.push({
+                        x: cw + 120 * baseScale, y: Math.random() * ch * 0.70, length: (80 + Math.random() * 160) * baseScale, speed: (13 + Math.random() * 14) * baseScale, dir: -1
+                    });
+                }
+            }
+
+            // Semillas de Viento
+            if (weather.wind > 15 && Math.random() < 0.25) {
+                const matureFlowers = plants.filter(p => p.growth >= 90);
+                if (matureFlowers.length > 0) {
+                    const sourcePlant = matureFlowers[Math.floor(Math.random() * matureFlowers.length)];
+                    const depthScale = (0.50 + sourcePlant.depth * 0.65) * baseScale;
+                    const plantGroundY = groundHorizonY + 10 + sourcePlant.depth * (groundHeight - 25);
+                    const flowerY = plantGroundY - ((ch * 0.36) * depthScale);
+
+                    for (let s = 0; s < 3; s++) {
+                        const targetDepth = Math.random();
+                        const targetGroundY = groundHorizonY + 10 + targetDepth * (groundHeight - 25);
+                        const horizontalVelocity = weather.windDir * (Math.random() * 12 + 4) * baseScale;
+
+                        seeds.push({
+                            x: sourcePlant.x * cw,
+                            y: flowerY,
+                            vx: horizontalVelocity,
+                            vy: (-3 - Math.random() * 4) * baseScale,
+                            depth: targetDepth,
+                            landingY: targetGroundY
+                        });
+                    }
+                }
+            }
+
+            // Abejitas
+            if (weather.pollen > 10 && Math.random() < 0.05 && bees.length < 6) {
+                const fromLeft = weather.beeSide === 'left';
+                bees.push({
+                    x: fromLeft ? -25 * baseScale : cw + 25 * baseScale,
+                    y: ch * 0.15 + Math.random() * (ch * 0.40),
+                    targetX: 0,
+                    targetDepth: 0.5,
+                    hasPollen: false,
+                    phase: 'seek',
+                    enterSide: weather.beeSide,
+                    travelDir: fromLeft ? 1 : -1,
+                    assignedPlant: null
+                });
+            }
+
+            // --- 7. RENDERIZADO DEL ENTORNO ---
+            const skyLight = Math.max(30, 75 - weather.rain * 0.45);
+            ecoCtx.fillStyle = `hsl(200, 30%, ${skyLight}%)`;
+            ecoCtx.fillRect(0, 0, cw, ch);
+
+            const sunX = Math.max(60 * baseScale, cw - Math.min(120 * baseScale, cw * 0.15));
+            const sunY = Math.min(100 * baseScale, ch * 0.20);
+            const sunSize = (Math.min(42, Math.max(18, cw * 0.04)) + (weather.sun / 100) * 14) * baseScale;
+
+            // RAYOS DE SOL
+            if (weather.sun > 5) {
+                const numRays = 8;
+                const rayLength = Math.max(cw, ch) * 1.6;
+                const sunIntensity = weather.sun / 100;
+
+                ecoCtx.save();
+                for (let i = 0; i < numRays; i++) {
+                    const baseAngle = Math.PI * 0.52 + (i / (numRays - 1)) * (Math.PI * 0.58);
+                    const wave = Math.sin(time * 1.5 + i * 1.3) * 0.04;
+                    const angle = baseAngle + wave;
+                    const halfWidth = 0.06 + Math.sin(time * 2 + i * 0.8) * 0.015;
+
+                    ecoCtx.beginPath();
+                    ecoCtx.moveTo(sunX, sunY);
+                    ecoCtx.lineTo(sunX + Math.cos(angle - halfWidth) * rayLength, sunY + Math.sin(angle - halfWidth) * rayLength);
+                    ecoCtx.lineTo(sunX + Math.cos(angle + halfWidth) * rayLength, sunY + Math.sin(angle + halfWidth) * rayLength);
+                    ecoCtx.closePath();
+
+                    const grad = ecoCtx.createRadialGradient(sunX, sunY, sunSize, sunX, sunY, rayLength * 0.85);
+                    const rayAlpha = sunIntensity * 0.28;
+                    grad.addColorStop(0, `rgba(254, 240, 138, ${rayAlpha * 1.4})`);
+                    grad.addColorStop(0.4, `rgba(253, 224, 71, ${rayAlpha * 0.7})`);
+                    grad.addColorStop(1, 'rgba(253, 224, 71, 0)');
+
+                    ecoCtx.fillStyle = grad;
+                    ecoCtx.fill();
+                }
+                ecoCtx.restore();
+
+                ecoCtx.fillStyle = `rgba(255, 230, 100, ${weather.sun * 0.0012})`;
+                ecoCtx.fillRect(0, 0, cw, ch);
+
+                const pulse = Math.sin(time * 4) * (3 * baseScale);
+                ecoCtx.save();
+                ecoCtx.translate(sunX, sunY);
+                ecoCtx.rotate(time * 0.4);
+                ecoCtx.fillStyle = '#fef08a';
+
+                for (let i = 0; i < 12; i++) {
+                    ecoCtx.rotate(Math.PI / 6);
+                    ecoCtx.beginPath();
+                    ecoCtx.moveTo(-4 * baseScale, -sunSize);
+                    ecoCtx.lineTo(0, -sunSize - (18 * baseScale) - pulse);
+                    ecoCtx.lineTo(4 * baseScale, -sunSize);
+                    ecoCtx.fill();
+                }
+                ecoCtx.restore();
+
+                ecoCtx.fillStyle = '#fbbf24';
+                ecoCtx.beginPath();
+                ecoCtx.arc(sunX, sunY, sunSize, 0, Math.PI * 2);
+                ecoCtx.fill();
+
+                ecoCtx.strokeStyle = '#f59e0b';
+                ecoCtx.lineWidth = 3 * baseScale;
+                ecoCtx.stroke();
+            }
+
+            // NUBES
+            if (currentCloudAlpha > 0.01) {
+                clouds.forEach(c => {
+                    let windEffect = (weather.wind > 5) ? (weather.windDir * weather.wind * 0.04) : 0.2;
+                    c.x += (c.speed + Math.abs(windEffect)) * (windEffect < 0 ? -1 : 1) * baseScale;
+                    
+                    if (c.x > cw + 300 * baseScale) c.x = -300 * baseScale;
+                    if (c.x < -300 * baseScale) c.x = cw + 300 * baseScale;
+
+                    ecoCtx.save();
+                    ecoCtx.translate(c.x, c.y * baseScale);
+                    ecoCtx.scale(c.scale * baseScale, c.scale * baseScale);
+
+                    const cloudGrad = ecoCtx.createLinearGradient(0, -40, 0, 40);
+                    cloudGrad.addColorStop(0, `rgba(148, 163, 184, ${currentCloudAlpha})`);
+                    cloudGrad.addColorStop(1, `rgba(51, 65, 85, ${currentCloudAlpha})`);
+                    
+                    ecoCtx.fillStyle = cloudGrad;
+                    ecoCtx.beginPath();
+                    ecoCtx.arc(0, 0, 40, 0, Math.PI * 2);
+                    ecoCtx.arc(-40, 10, 30, 0, Math.PI * 2);
+                    ecoCtx.arc(40, 10, 30, 0, Math.PI * 2);
+                    ecoCtx.arc(-75, 20, 20, 0, Math.PI * 2);
+                    ecoCtx.arc(75, 20, 20, 0, Math.PI * 2);
+                    ecoCtx.rect(-75, 10, 150, 30);
+                    ecoCtx.fill();
+                    
+                    ecoCtx.restore();
+                });
+            }
+
+            // Viento en fondo
+            ecoCtx.strokeStyle = 'rgba(255, 255, 255, 0.45)';
+            ecoCtx.lineWidth = 2 * baseScale;
+            ecoCtx.lineCap = 'round';
+            for (let i = windLines.length - 1; i >= 0; i--) {
+                const wl = windLines[i];
+                wl.x += wl.speed * wl.dir;
+
+                ecoCtx.beginPath();
+                ecoCtx.moveTo(wl.x, wl.y);
+                ecoCtx.quadraticCurveTo(
+                    wl.x + (wl.length / 2) * wl.dir,
+                    wl.y + Math.sin(time * 8 + wl.x) * (15 * baseScale),
+                    wl.x + wl.length * wl.dir,
+                    wl.y
+                );
+                ecoCtx.stroke();
+
+                if ((wl.dir === 1 && wl.x > cw + 120 * baseScale) || (wl.dir === -1 && wl.x < -120 * baseScale)) {
+                    windLines.splice(i, 1);
+                }
+            }
+
+            // Montañas
+            ecoCtx.fillStyle = '#1e293b';
+            ecoCtx.beginPath();
+            ecoCtx.moveTo(0, ch);
+            ecoCtx.lineTo(0, ch * 0.6);
+            ecoCtx.quadraticCurveTo(cw * 0.25, ch * 0.42, cw * 0.5, ch * 0.65);
+            ecoCtx.quadraticCurveTo(cw * 0.75, ch * 0.46, cw, ch * 0.52);
+            ecoCtx.lineTo(cw, ch);
+            ecoCtx.fill();
+
+            // Terreno
+            const groundGrad = ecoCtx.createLinearGradient(0, groundHorizonY, 0, ch);
+            groundGrad.addColorStop(0, '#381e10');
+            groundGrad.addColorStop(0.3, '#4d2813');
+            groundGrad.addColorStop(1, '#2c1409');
+            ecoCtx.fillStyle = groundGrad;
+            ecoCtx.fillRect(0, groundHorizonY, cw, groundHeight);
+
+            // Borde césped
+            ecoCtx.fillStyle = '#22543d';
+            ecoCtx.fillRect(0, groundHorizonY, cw, Math.max(6, 10 * baseScale));
+
+            plants.sort((a, b) => a.depth - b.depth);
+
+            // PLANTAS
+            plants.forEach(p => {
+                const px = p.x * cw;
+                const depthScale = (0.50 + p.depth * 0.65) * baseScale;
+                const plantGroundY = groundHorizonY + 10 + p.depth * (groundHeight - 20);
+
+                // Semilla
+                ecoCtx.fillStyle = '#78350f';
+                ecoCtx.beginPath();
+                ecoCtx.ellipse(px, plantGroundY + 6 * depthScale, 5 * depthScale, 3.5 * depthScale, 0, 0, Math.PI * 2);
+                ecoCtx.fill();
+
+                // Raíces
+                const rootDepth = Math.min(p.growth / 30, 1);
+                if (rootDepth > 0) {
+                    ecoCtx.strokeStyle = '#c4a482';
+                    ecoCtx.lineWidth = 2 * depthScale;
+                    ecoCtx.lineCap = 'round';
+                    ecoCtx.beginPath();
+                    ecoCtx.moveTo(px, plantGroundY + 10 * depthScale);
+                    ecoCtx.lineTo(px, plantGroundY + (10 + rootDepth * 35) * depthScale);
+
+                    if (rootDepth > 0.5) {
+                        ecoCtx.moveTo(px, plantGroundY + 20 * depthScale);
+                        ecoCtx.lineTo(px - 10 * depthScale, plantGroundY + (20 + 20 * rootDepth) * depthScale);
+                        ecoCtx.moveTo(px, plantGroundY + 26 * depthScale);
+                        ecoCtx.lineTo(px + 12 * depthScale, plantGroundY + (26 + 30 * rootDepth) * depthScale);
+                    }
+                    ecoCtx.stroke();
+                }
+
+                // Tallo y Flor
+                if (p.growth > 30) {
+                    const topGrowth = (p.growth - 30) / 70;
+                    const maxHeight = (ch * 0.38) * depthScale;
+                    const currentHeight = topGrowth * maxHeight;
+
+                    let sway = Math.sin(time + px) * 14 * topGrowth * depthScale;
+                    if (weather.wind > 5) {
+                        sway += (weather.windDir * weather.wind * 1.15 * topGrowth * depthScale) + 
+                                (weather.windDir * Math.sin(time * 12) * 10 * depthScale);
+                    }
+
+                    const topX = px + sway;
+                    const topY = plantGroundY - currentHeight;
+
+                    // Tallo
+                    ecoCtx.strokeStyle = '#022c22';
+                    ecoCtx.lineWidth = 8 * depthScale;
+                    ecoCtx.beginPath();
+                    ecoCtx.moveTo(px, plantGroundY + 3);
+                    ecoCtx.quadraticCurveTo(px, topY + currentHeight / 2, topX, topY);
+                    ecoCtx.stroke();
+
+                    ecoCtx.strokeStyle = '#22c55e';
+                    ecoCtx.lineWidth = 5 * depthScale;
+                    ecoCtx.beginPath();
+                    ecoCtx.moveTo(px, plantGroundY + 3);
+                    ecoCtx.quadraticCurveTo(px, topY + currentHeight / 2, topX, topY);
+                    ecoCtx.stroke();
+
+                    // Hojas
+                    if (topGrowth > 0.3) {
+                        const leafScale = Math.min(1, (topGrowth - 0.3) / 0.7) * depthScale;
+                        ecoCtx.fillStyle = '#15803d';
+                        ecoCtx.strokeStyle = '#022c22';
+                        ecoCtx.lineWidth = 1.5 * depthScale;
+
+                        ecoCtx.beginPath();
+                        ecoCtx.ellipse(px - 12 * leafScale + sway / 4, plantGroundY - currentHeight * 0.4, 14 * leafScale, 7 * leafScale, -Math.PI / 4 + (sway * 0.01), 0, Math.PI * 2);
+                        ecoCtx.fill();
+                        ecoCtx.stroke();
+
+                        ecoCtx.beginPath();
+                        ecoCtx.ellipse(px + 12 * leafScale + sway / 4, plantGroundY - currentHeight * 0.6, 14 * leafScale, 7 * leafScale, Math.PI / 4 + (sway * 0.01), 0, Math.PI * 2);
+                        ecoCtx.fill();
+                        ecoCtx.stroke();
+                    }
+
+                    // Flor Redonda
+                    if (topGrowth > 0.65) {
+                        const flowerScale = ((topGrowth - 0.65) / 0.35) * depthScale;
+                        const baseAngleOffset = time * (weather.wind > 10 ? 3 : 0.8);
+
+                        // Capa Exterior
+                        ecoCtx.fillStyle = '#f59e0b';
+                        ecoCtx.strokeStyle = '#b45309';
+                        ecoCtx.lineWidth = 1.8 * depthScale;
+                        const outerPetals = 16;
+                        const outerDist = 18 * flowerScale;
+
+                        for (let i = 0; i < outerPetals; i++) {
+                            const angle = (i * (Math.PI * 2 / outerPetals)) + baseAngleOffset;
+                            const pxPetal = topX + Math.cos(angle) * outerDist;
+                            const pyPetal = topY + Math.sin(angle) * outerDist;
+
+                            ecoCtx.beginPath();
+                            ecoCtx.ellipse(pxPetal, pyPetal, 14 * flowerScale, 12 * flowerScale, angle, 0, Math.PI * 2);
+                            ecoCtx.fill();
+                            ecoCtx.stroke();
+                        }
+
+                        // Capa Interior
+                        ecoCtx.fillStyle = '#fde047';
+                        ecoCtx.strokeStyle = '#ca8a04';
+                        ecoCtx.lineWidth = 1.8 * depthScale;
+                        const innerPetals = 16;
+                        const innerDist = 12 * flowerScale;
+
+                        for (let i = 0; i < innerPetals; i++) {
+                            const angle = (i * (Math.PI * 2 / innerPetals)) + baseAngleOffset + (Math.PI / innerPetals);
+                            const pxPetal = topX + Math.cos(angle) * innerDist;
+                            const pyPetal = topY + Math.sin(angle) * innerDist;
+
+                            ecoCtx.beginPath();
+                            ecoCtx.ellipse(pxPetal, pyPetal, 10 * flowerScale, 8 * flowerScale, angle, 0, Math.PI * 2);
+                            ecoCtx.fill();
+                            ecoCtx.stroke();
+                        }
+
+                        // Botón Central
+                        const centerRadius = 16 * flowerScale;
+                        ecoCtx.fillStyle = '#451a03';
+                        ecoCtx.strokeStyle = '#78350f';
+                        ecoCtx.lineWidth = 2.5 * depthScale;
+                        ecoCtx.beginPath();
+                        ecoCtx.arc(topX, topY, centerRadius, 0, Math.PI * 2);
+                        ecoCtx.fill();
+                        ecoCtx.stroke();
+
+                        // Semillas interiores
+                        ecoCtx.fillStyle = '#78350f';
+                        for (let i = 0; i < 12; i++) {
+                            const dotAngle = (i * Math.PI / 6) + time * 0.5;
+                            ecoCtx.beginPath();
+                            ecoCtx.arc(topX + Math.cos(dotAngle) * (9 * flowerScale), topY + Math.sin(dotAngle) * (9 * flowerScale), 2 * flowerScale, 0, Math.PI * 2);
+                            ecoCtx.fill();
+                        }
+                    }
+                }
+            });
+
+            // FÍSICAS DE SEMILLAS
+            for (let i = seeds.length - 1; i >= 0; i--) {
+                const s = seeds[i];
+                s.vy += 0.12 * baseScale;
+                s.x += s.vx;
+                s.y += s.vy;
+
+                ecoCtx.fillStyle = '#fb923c';
+                ecoCtx.beginPath();
+                ecoCtx.arc(s.x, s.y, 3.5 * baseScale, 0, Math.PI * 2);
+                ecoCtx.fill();
+
+                if (s.y >= s.landingY) {
+                    if (plants.length < 200) { 
+                        const relX = s.x / cw;
+                        if (relX > 0.02 && relX < 0.98) {
+                            let tooClose = false;
+                            for (let p of plants) {
+                                if (Math.abs(p.x - relX) < 0.012 && Math.abs(p.depth - s.depth) < 0.08) {
+                                    tooClose = true;
+                                    break;
+                                }
+                            }
+                            if (!tooClose) {
+                                plants.push({ x: relX, depth: s.depth, growth: 0 });
+                            }
+                        }
+                    }
+                    seeds.splice(i, 1);
+                }
+            }
+
+            // ABEJAS
+            for (let i = bees.length - 1; i >= 0; i--) {
+                const b = bees[i];
+
+                ecoCtx.save();
+                ecoCtx.translate(b.x, b.y);
+                const wobble = Math.sin(time * 35) * baseScale;
+
+                ecoCtx.fillStyle = 'rgba(255, 255, 255, 0.85)';
+                ecoCtx.beginPath();
+                ecoCtx.ellipse(-5 * baseScale, (-5 * baseScale) + wobble, 5 * baseScale, 3.5 * baseScale, -Math.PI / 6, 0, Math.PI * 2);
+                ecoCtx.fill();
+                ecoCtx.beginPath();
+                ecoCtx.ellipse(5 * baseScale, (-5 * baseScale) - wobble, 5 * baseScale, 3.5 * baseScale, Math.PI / 6, 0, Math.PI * 2);
+                ecoCtx.fill();
+
+                ecoCtx.fillStyle = '#fbbf24';
+                ecoCtx.beginPath();
+                ecoCtx.ellipse(0, 0, 7 * baseScale, 5 * baseScale, 0, 0, Math.PI * 2);
+                ecoCtx.fill();
+
+                ecoCtx.fillStyle = '#000';
+                ecoCtx.fillRect(-3 * baseScale, -4 * baseScale, 2 * baseScale, 8 * baseScale);
+                ecoCtx.fillRect(2 * baseScale, -4 * baseScale, 2 * baseScale, 8 * baseScale);
+
+                if (b.hasPollen) {
+                    ecoCtx.fillStyle = '#f59e0b';
+                    ecoCtx.beginPath();
+                    ecoCtx.arc(0, 5 * baseScale, 2.5 * baseScale, 0, Math.PI * 2);
+                    ecoCtx.fill();
+                }
+                ecoCtx.restore();
+
+                const maturePlants = plants.filter(p => p.growth >= 90);
+
+                if (b.phase === 'seek' && maturePlants.length > 0) {
+                    if (!b.assignedPlant) {
+                        b.assignedPlant = maturePlants[Math.floor(Math.random() * maturePlants.length)];
+                    }
+
+                    const targetPlant = b.assignedPlant;
+                    const depthScale = (0.50 + targetPlant.depth * 0.65) * baseScale;
+                    const plantGroundY = groundHorizonY + 12 + targetPlant.depth * (groundHeight - 25);
+                    const tx = targetPlant.x * cw;
+                    const ty = plantGroundY - ((ch * 0.38) * depthScale);
+
+                    let distToTarget = Math.hypot(tx - b.x, ty - b.y);
+                    let approachWobble = Math.min(1.5, distToTarget / 40);
+
+                    b.x += (tx - b.x) * 0.035 + Math.sin(time * 8) * (approachWobble * baseScale);
+                    b.y += (ty - b.y) * 0.035 + Math.cos(time * 6) * (approachWobble * baseScale);
+
+                    if (distToTarget < 20 * baseScale) {
+                        b.hasPollen = true;
+                        b.phase = 'plant';
+                        
+                        let sortedX = plants.map(p => p.x).sort((a,b) => a-b);
+                        let maxGap = 0;
+                        let gapCenter = Math.random(); 
+                        
+                        if(sortedX[0] > maxGap) { maxGap = sortedX[0]; gapCenter = sortedX[0]/2; }
+                        for(let j=0; j<sortedX.length-1; j++) {
+                            let gap = sortedX[j+1] - sortedX[j];
+                            if(gap > maxGap) {
+                                maxGap = gap;
+                                gapCenter = sortedX[j] + gap/2;
+                            }
+                        }
+                        if(1 - sortedX[sortedX.length-1] > maxGap) { gapCenter = sortedX[sortedX.length-1] + (1 - sortedX[sortedX.length-1])/2; }
+
+                        b.targetX = (gapCenter * cw) + (Math.random() - 0.5) * (30 * baseScale);
+                        b.targetDepth = Math.max(0.1, Math.min(0.9, Math.random()));
+                    }
+                } else if (b.phase === 'plant') {
+                    const targetGroundY = groundHorizonY + 12 + b.targetDepth * (groundHeight - 25);
+                    let distToTarget = Math.hypot(b.targetX - b.x, (targetGroundY - 35 * baseScale) - b.y);
+                    let approachWobble = Math.min(1.5, distToTarget / 40);
+
+                    b.x += (b.targetX - b.x) * 0.035 + Math.sin(time * 8) * (approachWobble * baseScale);
+                    b.y += ((targetGroundY - 35 * baseScale) - b.y) * 0.035 + Math.cos(time * 6) * (approachWobble * baseScale);
+
+                    if (distToTarget < 20 * baseScale) {
+                        for (let s = 0; s < 3; s++) {
+                            let sDepth = Math.max(0, Math.min(1, b.targetDepth + (Math.random() - 0.5) * 0.15));
+                            let sLandingY = groundHorizonY + 12 + sDepth * (groundHeight - 25);
+                            seeds.push({
+                                x: b.x,
+                                y: b.y,
+                                vx: (Math.random() - 0.5) * (2 * baseScale),
+                                vy: (-1 - Math.random() * 1.5) * baseScale,
+                                depth: sDepth,
+                                landingY: sLandingY
+                            });
+                        }
+                        b.hasPollen = false;
+                        b.phase = 'leave';
+                    }
+                } else {
+                    b.x += b.travelDir * (3.5 * baseScale);
+                    b.y -= 1.0 * baseScale;
+                    if (b.x > cw + 60 * baseScale || b.x < -60 * baseScale) bees.splice(i, 1);
+                }
+            }
+
+            // LLUVIA TRAZADA
+            ecoCtx.lineCap = 'round';
+            for (let i = rainDrops.length - 1; i >= 0; i--) {
+                const drop = rainDrops[i];
+                drop.y += drop.vy;
+                const windShift = weather.wind > 5 ? (weather.windDir * weather.wind * 0.12 * baseScale) : 0;
+                drop.x += windShift;
+
+                ecoCtx.strokeStyle = `rgba(147, 197, 253, ${drop.alpha})`;
+                ecoCtx.lineWidth = drop.thick;
+                ecoCtx.beginPath();
+                ecoCtx.moveTo(drop.x, drop.y);
+                ecoCtx.lineTo(drop.x + windShift * 1.5, drop.y + drop.len);
+                ecoCtx.stroke();
+
+                if (drop.y > ch) {
+                    rainDrops.splice(i, 1);
+                }
+            }
+
+            requestAnimationFrame(loop);
+        }
+
+        loop();
+    </script>
+</body>
+</html>
